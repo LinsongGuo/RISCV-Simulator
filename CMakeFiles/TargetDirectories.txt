@@ -1,3 +1,0 @@
-/home/gls/RISC-V/CMakeFiles/rebuild_cache.dir
-/home/gls/RISC-V/CMakeFiles/code.dir
-/home/gls/RISC-V/CMakeFiles/edit_cache.dir
