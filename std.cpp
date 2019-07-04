@@ -1,20 +1,22 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-namespace NAME {
-const char REG_string[40][15] = {
-    "REG_ZERO", "REG_RA", "REG_SP",     "REG_GP",  "REG_TP", "REG_T0",
-    "REG_T1",   "REG_T2", "REG_S0",     "REG_S1",  "REG_A0", "REG_A1",
-    "REG_A2",   "REG_A3", "REG_A4",     "REG_A5",  "REG_A6", "REG_A7",
-    "REG_S2",   "REG_S3", "REG_S4",     "REG_S5",  "REG_S6", "REG_S7",
-    "REG_S8",   "REG_S9", "REG_S10",    "REG_S11", "REG_T3", "REG_T4",
-    "REG_T5",   "REG_T6", "UNKNOWN_REG"};
-const char INST_string[40][15] = {
-    "LUI",  "AUIPC", "JAL",  "JALR", "BEQ",   "BNE",         "BLT", "BGE",
-    "BLTU", "BGEU",  "LB",   "LH",   "LW",    "LBU",         "LHU", "SB",
-    "SH",   "SW",    "ADDI", "SLTI", "SLTIU", "XORI",        "ORI", "ANDI",
-    "SLLI", "SRLI",  "SRAI", "ADD",  "SUB",   "SLL",         "SLT", "SLTU",
-    "XOR",  "SRL",   "SRA",  "OR",   "AND",   "UNKNOWN_INST"};
+namespace NAME{
+	const char REG_string[40][15] = {
+      "REG_ZERO", "REG_RA", "REG_SP",     "REG_GP",  "REG_TP", "REG_T0",
+      "REG_T1",   "REG_T2", "REG_S0",     "REG_S1",  "REG_A0", "REG_A1",
+      "REG_A2",   "REG_A3", "REG_A4",     "REG_A5",  "REG_A6", "REG_A7",
+      "REG_S2",   "REG_S3", "REG_S4",     "REG_S5",  "REG_S6", "REG_S7",
+      "REG_S8",   "REG_S9", "REG_S10",    "REG_S11", "REG_T3", "REG_T4",
+      "REG_T5",   "REG_T6", "UNKNOWN_REG"
+  };
+  const char INST_string[40][15] = {
+      "LUI",  "AUIPC", "JAL",  "JALR", "BEQ",   "BNE",         "BLT", "BGE",
+      "BLTU", "BGEU",  "LB",   "LH",   "LW",    "LBU",         "LHU", "SB",
+      "SH",   "SW",    "ADDI", "SLTI", "SLTIU", "XORI",        "ORI", "ANDI",
+      "SLLI", "SRLI",  "SRAI", "ADD",  "SUB",   "SLL",         "SLT", "SLTU",
+      "XOR",  "SRL",   "SRA",  "OR",   "AND",   "UNKNOWN_INST"
+  };
 }
 
 class simulator {
@@ -22,8 +24,7 @@ private:
   const uint32_t bin_30_25 =
       (1 << 30) | (1 << 29) | (1 << 28) | (1 << 27) | (1 << 26) | (1 << 25);
   const uint32_t bin_11_8 = (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8);
-  const uint32_t bin_11_7 =
-      (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 7);
+  const uint32_t bin_11_7 = (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 7);
   const uint32_t bin_19_12 = (1 << 19) | (1 << 18) | (1 << 17) | (1 << 16) |
                              (1 << 15) | (1 << 14) | (1 << 13) | (1 << 12);
   const uint32_t bin_30_21 = (1 << 30) | (1 << 29) | (1 << 28) | (1 << 27) |
@@ -115,11 +116,10 @@ private:
     AND,
     UNKNOWN_INST
   };
-  /*
   struct Inst {
     INST opt;
     REG rs1, rs2, rd;
-    int imm, operand;
+    int operand, imm;
     uint32_t funct3, funct7;
     Inst(INST _opt = UNKNOWN_INST, REG _rs1 = UNKNOWN_REG,
          REG _rs2 = UNKNOWN_REG, REG _rd = UNKNOWN_REG, int _operand = 0,
@@ -128,19 +128,7 @@ private:
           imm(_imm), funct3(_funct3), funct7(_funct7) {
       ;
     }
-  }*/
-
-  struct FlowRegister {
-    INST opt;
-    uint32_t ir;
-    REG rd;
-    int32_t npc, rs1, rs2, operand, imm, ALU;
-    FlowRegister() {
-      opt = UNKNOWN_INST;
-      ir = npc = operand = imm = ALU = rs1 = rs2 = 0;
-      rd = UNKNOWN_REG;
-    }
-  } IF_ID, ID_EX, EX_MEM, MEM_WB;
+  };
 
 public:
   simulator() { pc = 0x00000000; }
@@ -159,15 +147,7 @@ public:
       }
     }
   }
-
-  /*--------------------instruction fetch-----------------------*/
-  void fetch() {
-    memcpy(&IF_ID.ir, mem + pc, 4);
-    IF_ID.npc = pc + 4;
-    pc += 4;
-  }
-
-  /*--------------------instruction decode----------------------*/
+  void fetch(uint32_t &code) { memcpy(&code, mem + pc, 4); }
   int operand_I(const uint32_t &code) {
     int res = code >> 20;
     if (code >> 31) {
@@ -201,11 +181,8 @@ public:
       res |= bin_31_20;
     return res;
   }
-  void decode() {
-    ID_EX = IF_ID;
-    uint32_t code = IF_ID.ir;
-    uint32_t opcode = code & 0x7f, funct3 = (code >> 12) & 0x7,
-             funct7 = code >> 25;
+  Inst decode(const uint32_t &code) {
+    uint32_t opcode = code & 0x7f, funct3 = (code >> 12) & 0x7, funct7 = -1;
     int imm = 0, operand = 0;
     REG rs1 = UNKNOWN_REG, rs2 = UNKNOWN_REG, rd = UNKNOWN_REG;
     INST opt = UNKNOWN_INST;
@@ -214,12 +191,14 @@ public:
       opt = LUI;
       rd = REG((code >> 7) & 0x1f);
       imm = (code >> 12) << 12;
+      funct3 = -1;
       operand = operand_U(code);
       break;
     case 0x17:
       opt = AUIPC;
       rd = REG((code >> 7) & 0x1f);
       imm = (code >> 12) << 12;
+      funct3 = -1;
       operand = operand_U(code);
       break;
     case 0x6F:
@@ -228,19 +207,16 @@ public:
       imm = ((code >> 31) << 20) | (((code & bin_30_21) >> 21) << 1) |
             (((code & (1 << 20)) >> 20) << 11) |
             (((code & bin_19_12) >> 12) << 12);
+      funct3 = -1;
       operand = operand_J(code);
-      ID_EX.ALU = IF_ID.npc;
-      pc += operand - 4;
       break;
     case 0x67:
       opt = JALR;
       rd = REG((code >> 7) & 0x1f);
       rs1 = REG((code >> 15) & 0x1f);
       imm = (code >> 20);
+      funct3 = -1;
       operand = operand_I(code);
-      ID_EX.ALU = IF_ID.npc;
-
-      pc = (reg[rs1] + operand) & (-2);
       break;
     case 0x63:
       rs1 = REG((code >> 15) & 0x1f);
@@ -251,33 +227,21 @@ public:
       switch (funct3) {
       case 0x0:
         opt = BEQ;
-        if (reg[rs1] == reg[rs2])
-          pc += operand - 4;
         break;
       case 0x1:
         opt = BNE;
-        if (reg[rs1] != reg[rs2])
-          pc += operand - 4;
         break;
       case 0x4:
         opt = BLT;
-        if (reg[rs1] < reg[rs2])
-          pc += operand - 4;
         break;
       case 0x5:
         opt = BGE;
-        if (reg[rs1] >= reg[rs2])
-          pc += operand - 4;
         break;
       case 0x6:
         opt = BLTU;
-        if (uint32_t(reg[rs1]) < uint32_t(reg[rs2]))
-          pc += operand - 4;
         break;
       case 0x7:
         opt = BGEU;
-        if (uint32_t(reg[rs1]) >= uint32_t(reg[rs2]))
-          pc += operand - 4;
         break;
       }
       break;
@@ -352,9 +316,11 @@ public:
         break;
       case 0x1:
         imm = (code & bin_24_20) >> 20;
+        funct7 = code >> 25;
         opt = SLLI;
         break;
       case 0x5:
+      	funct7 = code >> 25;
         switch (funct7) {
         case 0x0:
           imm = (code & bin_24_20) >> 20;
@@ -368,10 +334,12 @@ public:
         break;
       }
       break;
-    case 0x33:
+    case 0x33:      
+      //printf("%x  %x  case 0x33\n", code, funct3);
       rd = REG((code >> 7) & 0x1f);
       rs1 = REG((code >> 15) & 0x1f);
       rs2 = REG((code >> 20) & 0x1f);
+      funct7 = code >> 25;
       switch (funct3) {
       case 0x0:
         switch (funct7) {
@@ -414,61 +382,182 @@ public:
       }
       break;
     }
-    ID_EX.opt = opt;
-    ID_EX.rs1 = reg[rs1];
-    ID_EX.rs2 = reg[rs2];
-    ID_EX.rd = rd;
-    ID_EX.imm = imm;
-    ID_EX.operand = operand;
+    return Inst(opt, rs1, rs2, rd, operand, imm, funct3, funct7);
   }
 
-  /*--------------------------instruction execute----------------------------*/
-    void LUI_exe() { EX_MEM.ALU = ID_EX.operand; }
-  void AUIPC_exe() { EX_MEM.ALU = ID_EX.npc + ID_EX.operand - 4; }
-  void JAL_exe() { ; }
-  void JALR_exe() { ; }
-  void BEQ_exe() { ; }
-  void BNE_exe() { ; }
-  void BLT_exe() { ; }
-  void BGE_exe() { ; }
-  void BLTU_exe() { ; }
-  void BGEU_exe() { ; }
-  void LB_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void LBU_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void LH_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void LHU_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void LW_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void SB_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void SH_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void SW_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void ADDI_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.operand; }
-  void SLTI_exe() { EX_MEM.ALU = (ID_EX.rs1 < ID_EX.operand); }
-  void SLTIU_exe() {
-    EX_MEM.ALU = (uint32_t(ID_EX.rs1) < uint32_t(ID_EX.operand));
+  void LUI_exe(const Inst &inst) {
+    reg[inst.rd] = inst.operand;
+    pc += 4;
   }
-  void XORI_exe() { EX_MEM.ALU = ID_EX.rs1 ^ ID_EX.operand; }
-  void ORI_exe() { EX_MEM.ALU = ID_EX.rs1 | ID_EX.operand; }
-  void ANDI_exe() { EX_MEM.ALU = ID_EX.rs1 & ID_EX.operand; }
-  void SLLI_exe() { EX_MEM.ALU = ID_EX.rs1 << ID_EX.imm; }
-  void SRLI_exe() {
-    EX_MEM.ALU = uint32_t(ID_EX.rs1) >> uint32_t(ID_EX.imm);
+  void AUIPC_exe(const Inst &inst) {
+    reg[inst.rd] = pc + inst.operand;
+    pc += 4;
   }
-  void SRAI_exe() { EX_MEM.ALU = ID_EX.rs1 >> ID_EX.imm; }
-  void ADD_exe() { EX_MEM.ALU = ID_EX.rs1 + ID_EX.rs2; }
-  void SUB_exe() { EX_MEM.ALU = ID_EX.rs1 - ID_EX.rs2; }
-  void SLL_exe() { EX_MEM.ALU = ID_EX.rs1 << (ID_EX.rs2 & 0x1f); }
-  void SLT_exe() { EX_MEM.ALU = (ID_EX.rs1 < ID_EX.rs2); }
-  void SLTU_exe() {
-    EX_MEM.ALU = (uint32_t(ID_EX.rs1) < uint32_t(ID_EX.rs2));
+  void JAL_exe(const Inst &inst) {
+    reg[inst.rd] = pc + 4;
+    pc += inst.operand;
   }
-  void XOR_exe() { EX_MEM.ALU = ID_EX.rs1 ^ ID_EX.rs2; }
-  void SRL_exe() {
-    EX_MEM.ALU = uint32_t(ID_EX.rs1) >> uint32_t((ID_EX.rs2 & 0x1f));
+  void JALR_exe(const Inst &inst) {
+    reg[inst.rd] = pc + 4;
+    pc = (reg[inst.rs1] + inst.operand) & (-2);
   }
-  void SRA_exe() { EX_MEM.ALU = ID_EX.rs1 >> (ID_EX.rs2 & 0x1f); }
-  void OR_exe() { EX_MEM.ALU = ID_EX.rs1 | ID_EX.rs2; }
-  void AND_exe() { EX_MEM.ALU = ID_EX.rs1 & ID_EX.rs2; }
-  void (simulator::*func_exe[50])() = {
+  void BEQ_exe(const Inst &inst) {
+    if (reg[inst.rs1] == reg[inst.rs2]) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+  void BNE_exe(const Inst &inst) {
+    if (reg[inst.rs1] != reg[inst.rs2]) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+  void BLT_exe(const Inst &inst) {
+    if (reg[inst.rs1] < reg[inst.rs2]) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+  void BGE_exe(const Inst &inst) {
+    if (reg[inst.rs1] >= reg[inst.rs2]) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+  void BLTU_exe(const Inst &inst) {
+    if (uint32_t(reg[inst.rs1] < uint32_t(reg[inst.rs2]))) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+  void BGEU_exe(const Inst &inst) {
+    if (uint32_t(reg[inst.rs1]) >= uint32_t(reg[inst.rs2])) {
+      pc += inst.operand;
+    } else
+      pc += 4;
+  }
+
+  void LB_exe(const Inst &inst) {
+    int8_t tmp;
+    memcpy(&tmp, mem + reg[inst.rs1] + inst.operand, 1);
+    reg[inst.rd] = tmp;
+    pc += 4;
+  }
+  void LBU_exe(const Inst &inst) {
+    uint8_t tmp;
+    memcpy(&tmp, mem + reg[inst.rs1] + inst.operand, 1);
+    reg[inst.rd] = tmp;
+    pc += 4;
+  }
+  void LH_exe(const Inst &inst) {
+    int16_t tmp;
+    memcpy(&tmp, mem + reg[inst.rs1] + inst.operand, 2);
+    reg[inst.rd] = tmp;
+    pc += 4;
+  }
+  void LHU_exe(const Inst &inst) {
+    uint16_t tmp;
+    memcpy(&tmp, mem + reg[inst.rs1] + inst.operand, 2);
+    reg[inst.rd] = tmp;
+    pc += 4;
+  }
+  void LW_exe(const Inst &inst) {
+    memcpy(&reg[inst.rd], mem + reg[inst.rs1] + inst.operand, 4);
+    pc += 4;
+  }
+  void SB_exe(const Inst &inst) {
+    uint8_t tmp = reg[inst.rs2];
+    //printf("SB_exe %d %d %x %x %x %x\n", inst.rs1, inst.rs2, tmp, reg[inst.rs1], inst.operand, reg[inst.rs1] + inst.operand);
+    memcpy(mem + reg[inst.rs1] + inst.operand, &tmp, 1);
+    pc += 4;
+  }
+  void SH_exe(const Inst &inst) {
+    uint16_t tmp = reg[inst.rs2];
+    memcpy(mem + reg[inst.rs1] + inst.operand, &tmp, 2);
+    pc += 4;
+  }
+  void SW_exe(const Inst &inst) {
+  	memcpy(mem + reg[inst.rs1] + inst.operand, &reg[inst.rs2], 4);
+    pc += 4;
+  }
+  void ADDI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] + inst.operand;
+    pc += 4;
+  }
+  void SLTI_exe(const Inst &inst) {
+    reg[inst.rd] = (reg[inst.rs1] < inst.operand);
+    pc += 4;
+  }
+  void SLTIU_exe(const Inst &inst) {
+    reg[inst.rd] = (uint32_t(reg[inst.rs1]) < uint32_t(inst.operand));
+    pc += 4;
+  }
+  void XORI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] ^ inst.operand;
+    pc += 4;
+  }
+  void ORI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] | inst.operand;
+    pc += 4;
+  }
+  void ANDI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] & inst.operand;
+    pc += 4;
+  }
+  void SLLI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] << inst.imm;
+    pc += 4;
+  }
+  void SRLI_exe(const Inst &inst) {
+    reg[inst.rd] = uint32_t(reg[inst.rs1]) >> uint32_t(inst.imm);
+    pc += 4;
+  }
+  void SRAI_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] >> inst.imm;
+    pc += 4;
+  }
+  void ADD_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] + reg[inst.rs2];
+    pc += 4;
+  }
+  void SUB_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] - reg[inst.rs2];
+    pc += 4;
+  }
+  void SLL_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] << (reg[inst.rs2] & 0x1f);
+    pc += 4;
+  }
+  void SLT_exe(const Inst &inst) {
+    reg[inst.rd] = (reg[inst.rs1] < reg[inst.rs2]);
+    pc += 4;
+  }
+  void SLTU_exe(const Inst &inst) {
+    reg[inst.rd] = (uint32_t(reg[inst.rs1]) < uint32_t(reg[inst.rs2]));
+    pc += 4;
+  }
+  void XOR_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] ^ reg[inst.rs2];
+    pc += 4;
+  }
+  void SRL_exe(const Inst &inst) {
+    reg[inst.rd] = uint32_t(reg[inst.rs1]) >> uint32_t((reg[inst.rs2] & 0x1f));
+    pc += 4;
+  }
+  void SRA_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] >> (reg[inst.rs2] & 0x1f);
+    pc += 4;
+  }
+  void OR_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] | reg[inst.rs2];
+    pc += 4;
+  }
+  void AND_exe(const Inst &inst) {
+    reg[inst.rd] = reg[inst.rs1] & reg[inst.rs2];
+    pc += 4;
+  }
+  void (simulator::*func[50])(const Inst &inst) = {
       &simulator::LUI_exe,  &simulator::AUIPC_exe, &simulator::JAL_exe,
       &simulator::JALR_exe, &simulator::BEQ_exe,   &simulator::BNE_exe,
       &simulator::BLT_exe,  &simulator::BGE_exe,   &simulator::BLTU_exe,
@@ -481,112 +570,29 @@ public:
       &simulator::ADD_exe,  &simulator::SUB_exe,   &simulator::SLL_exe,
       &simulator::SLT_exe,  &simulator::SLTU_exe,  &simulator::XOR_exe,
       &simulator::SRL_exe,  &simulator::SRA_exe,   &simulator::OR_exe,
-      &simulator::AND_exe};
-  void execute() {
-    EX_MEM = ID_EX;
-    (this->*func_exe[ID_EX.opt])();
-  }
-
-  /*--------------------------instruction memoryaccess-----------------------*/
-  void LB_mem() {
-    int8_t LB_tmp;
-    memcpy(&LB_tmp, mem + EX_MEM.ALU, 1);
-    MEM_WB.ALU = LB_tmp;
-  }
-  void LBU_mem() {
-    uint8_t LBU_tmp;
-    memcpy(&LBU_tmp, mem + EX_MEM.ALU, 1);
-    MEM_WB.ALU = LBU_tmp;
-  }
-  void LH_mem() {
-    int16_t LH_tmp;
-    memcpy(&LH_tmp, mem + EX_MEM.ALU, 2);
-    MEM_WB.ALU = LH_tmp;
-  }
-  void LHU_mem() {
-    uint16_t LHU_tmp;
-    memcpy(&LHU_tmp, mem + EX_MEM.ALU, 2);
-    MEM_WB.ALU = LHU_tmp;
-  }
-  void LW_mem() {
-    int LW_tmp;
-    memcpy(&LW_tmp, mem + EX_MEM.ALU, 4);
-    MEM_WB.ALU = LW_tmp;
-  }
-  void SB_mem() {
-    uint8_t SB_tmp = EX_MEM.rs2;
-    memcpy(mem + EX_MEM.ALU, &SB_tmp, 1);
-  }
-  void SH_mem() {
-    uint16_t SH_tmp = EX_MEM.rs2;
-    memcpy(mem + EX_MEM.ALU, &SH_tmp, 2);
-  }
-  void SW_mem() {
-    int SW_tmp = EX_MEM.rs2;
-    memcpy(mem + EX_MEM.ALU, &SW_tmp, 4);
-  }
-  void memoryAccess() {
-    MEM_WB = EX_MEM;
-    switch (EX_MEM.opt) {
-    case LB:
-      LB_mem();
-      break;
-    case LBU:
-      LBU_mem();
-      break;
-    case LH:
-      LH_mem();
-      break;
-    case LHU:
-      LHU_mem();
-      break;
-    case LW:
-      LW_mem();
-      break;
-    case SB:
-      SB_mem();
-      break;
-    case SH:
-      SH_mem();
-      break;
-    case SW:
-      SW_mem();
-      break;
-    }
-  }
-
-  /*---------------------------instruction writeback-------------------------*/
-  void writeBack() {
-    if (EX_MEM.rd != UNKNOWN_REG)
-      reg[EX_MEM.rd] = MEM_WB.ALU;
-  }
-  /*
+      &simulator::AND_exe
+  };
   void print(Inst inst) {
-    printf("%s rs1:%s rs2:%s rd:%s imm:%x rs1:%x rs2:%x\n",
-           NAME::INST_string[inst.opt], NAME::REG_string[inst.rs1],
-           NAME::REG_string[inst.rs2], NAME::REG_string[inst.rd], inst.operand,
-           reg[inst.rs1], reg[inst.rs2]);
+  	  printf("inst: %s %s %s %s %x %d \n", NAME::INST_string[inst.opt],
+           NAME::REG_string[inst.rs1], NAME::REG_string[inst.rs2], NAME::REG_string[inst.rd],
+           inst.operand, inst.operand);
+  	  cout << bitset<32>(inst.operand) <<' '<<bitset<8>(inst.funct3)<<' '<< bitset<8>(inst.funct7)<<endl;  
   }
-*/
+
+  void execute(const Inst &inst) { 
+  	(this->*func[inst.opt])(inst); 
+  }
+  
+  
   void solve() {
     read();
-    pc = 0;
+    uint32_t code = 0;
     while (true) {
-      //printf("pc : %x\n", pc);
-      fetch();
-      if (IF_ID.ir == 0x00c68223)
-        break;
-     // printf("fetch: %x\n", IF_ID.ir);
-      decode();
-    //  printf("decode: %x %s %x %x %x %x %d\n", ID_EX.ir, NAME::INST_string[ID_EX.opt], ID_EX.operand, ID_EX.imm, ID_EX.rs1, ID_EX.rs2, ID_EX.rd);
-      execute();
-   //   printf("exe: %x %x\n", ID_EX.ir, ID_EX.ALU);
-      memoryAccess();
-    //  printf("mem: %x %x\n", ID_EX.ir, ID_EX.ALU);
-      writeBack();
-     // printf("wb: %s\n", NAME::REG_string[ID_EX.rd]);
+      fetch(code);
+      if (code == 0x00c68223) break;
+      Inst inst = decode(code);   
+      execute(inst);
       reg[REG_ZERO] = 0;
-    ///	for(int i = 0; i < 32; ++i) printf("%x\n", reg[i]);
     }
     printf("%d\n", reg[REG_A0] & 0xff);
   }
