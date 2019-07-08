@@ -114,8 +114,8 @@ private:
     UNKNOWN_INST
   };
   enum State { empty, finish, unfinish };
-  int reg[32], flag[32], pc, now, next, time_clock, last_mem, pause,
-      branch_skip;
+  int reg[32], pc, now, next, time_clock, last_mem, pause, branch_skip,
+      ex_rs1_val, ex_rs2_val, mem_rs2_val;
   uint8_t mem[0x200ff];
   char buffer[10];
 
@@ -123,11 +123,11 @@ private:
     INST opt;
     uint32_t code;
     REG rd, rs1, rs2;
-    int32_t npc, rs1_val, rs2_val, operand, imm, ALU;
+    int32_t npc, operand, imm, ALU;
     State state;
     pipeline() {
       opt = UNKNOWN_INST;
-      code = npc = rs1_val = rs2_val = operand = imm = ALU = 0;
+      code = npc = operand = imm = ALU = 0;
       rd = rs1 = rs2 = UNKNOWN_REG;
       state = empty;
     }
@@ -142,7 +142,7 @@ public:
     branch_skip = 0xffffffff;
     now = 0, next = 1;
     for (int i = 0; i < 32; ++i) {
-      reg[i] = flag[i] = 0;
+      reg[i] = 0;
     }
   }
   void read() {
@@ -165,7 +165,7 @@ public:
   void fetch() {
     uint32_t code;
     memcpy(&code, mem + IF[now].npc, 4);
- //   printf("fetch: %x %x\n", IF[now].npc, code);
+    //   printf("fetch: %x %x\n", IF[now].npc, code);
     if (code == 0x00c68223)
       IF[now].state = empty;
     else {
@@ -210,7 +210,7 @@ public:
     return res;
   }
   void decode() {
-   // printf("decode: ");
+    // printf("decode: ");
     uint32_t code = ID[now].code;
     uint32_t opcode = code & 0x7f, funct3 = (code >> 12) & 0x7,
              funct7 = code >> 25;
@@ -409,13 +409,11 @@ public:
     ID[now].rs1 = rs1;
     ID[now].rs2 = rs2;
     ID[now].rd = rd;
-    if (rd != UNKNOWN_REG)
-      flag[rd]++;
     ID[now].imm = imm;
     ID[now].operand = operand;
     ID[now].state = finish;
-   // printf("%s %s %s %s %x\n", NAME::INST_string[opt], NAME::REG_string[rs1],
-     //      NAME::REG_string[rs2], NAME::REG_string[rd], operand);
+    // printf("%s %s %s %s %x\n", NAME::INST_string[opt], NAME::REG_string[rs1],
+    //      NAME::REG_string[rs2], NAME::REG_string[rd], operand);
   }
 
   /*--------------------------instruction execute----------------------------*/
@@ -457,78 +455,71 @@ public:
   }
   void JALR_exe() {
     EX[now].ALU = EX[now].npc;
-    branch_skip = (reg[EX[now].rs1] + EX[now].operand) & (-2);
+    branch_skip = (ex_rs1_val + EX[now].operand) & (-2);
   }
   void BEQ_exe() {
-    if (reg[EX[now].rs1] == reg[EX[now].rs2]) {
+    if (ex_rs1_val == ex_rs2_val) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
   void BNE_exe() {
-    if (reg[EX[now].rs1] != reg[EX[now].rs2]) {
+    if (ex_rs1_val != ex_rs2_val) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
   void BLT_exe() {
-    if (reg[EX[now].rs1] < reg[EX[now].rs2]) {
+    if (ex_rs1_val < ex_rs2_val) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
   void BGE_exe() {
-    if (reg[EX[now].rs1] >= reg[EX[now].rs2]) {
+    if (ex_rs1_val >= ex_rs2_val) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
   void BLTU_exe() {
-    if (uint32_t(reg[EX[now].rs1]) < uint32_t(reg[EX[now].rs2])) {
+    if (uint32_t(ex_rs1_val) < uint32_t(ex_rs2_val)) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
   void BGEU_exe() {
-    if (uint32_t(reg[EX[now].rs1]) >= uint32_t(reg[EX[now].rs2])) {
+    if (uint32_t(ex_rs1_val) >= uint32_t(ex_rs2_val)) {
       branch_skip = EX[now].npc + EX[now].operand - 4;
     }
   }
-  void LB_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void LBU_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void LH_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void LHU_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void LW_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void SB_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void SH_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void SW_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void ADDI_exe() { EX[now].ALU = reg[EX[now].rs1] + EX[now].operand; }
-  void SLTI_exe() { EX[now].ALU = reg[EX[now].rs1] < EX[now].operand; }
+  void LB_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void LBU_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void LH_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void LHU_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void LW_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void SB_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void SH_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void SW_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void ADDI_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
+  void SLTI_exe() { EX[now].ALU = ex_rs1_val < EX[now].operand; }
   void SLTIU_exe() {
-    EX[now].ALU = uint32_t(reg[EX[now].rs1]) < uint32_t(EX[now].operand);
+    EX[now].ALU = uint32_t(ex_rs1_val) < uint32_t(EX[now].operand);
   }
-  void XORI_exe() { EX[now].ALU = reg[EX[now].rs1] ^ EX[now].operand; }
-  void ORI_exe() { EX[now].ALU = reg[EX[now].rs1] | EX[now].operand; }
-  void ANDI_exe() { EX[now].ALU = reg[EX[now].rs1] & EX[now].operand; }
-  void SLLI_exe() { EX[now].ALU = reg[EX[now].rs1] << EX[now].imm; }
+  void XORI_exe() { EX[now].ALU = ex_rs1_val ^ EX[now].operand; }
+  void ORI_exe() { EX[now].ALU = ex_rs1_val | EX[now].operand; }
+  void ANDI_exe() { EX[now].ALU = ex_rs1_val & EX[now].operand; }
+  void SLLI_exe() { EX[now].ALU = ex_rs1_val << EX[now].imm; }
   void SRLI_exe() {
-    EX[now].ALU = uint32_t(reg[EX[now].rs1]) >> uint32_t(EX[now].imm);
+    EX[now].ALU = uint32_t(ex_rs1_val) >> uint32_t(EX[now].imm);
   }
-  void SRAI_exe() { EX[now].ALU = reg[EX[now].rs1] >> EX[now].imm; }
-  void ADD_exe() { EX[now].ALU = reg[EX[now].rs1] + reg[EX[now].rs2]; }
-  void SUB_exe() { EX[now].ALU = reg[EX[now].rs1] - reg[EX[now].rs2]; }
-  void SLL_exe() {
-    EX[now].ALU = reg[EX[now].rs1] << (reg[EX[now].rs2] & 0x1f);
-  }
-  void SLT_exe() { EX[now].ALU = reg[EX[now].rs1] < reg[EX[now].rs2]; }
-  void SLTU_exe() {
-    EX[now].ALU = uint32_t(reg[EX[now].rs1]) < uint32_t(reg[EX[now].rs2]);
-  }
-  void XOR_exe() { EX[now].ALU = reg[EX[now].rs1] ^ reg[EX[now].rs2]; }
+  void SRAI_exe() { EX[now].ALU = ex_rs1_val >> EX[now].imm; }
+  void ADD_exe() { EX[now].ALU = ex_rs1_val + ex_rs2_val; }
+  void SUB_exe() { EX[now].ALU = ex_rs1_val - ex_rs2_val; }
+  void SLL_exe() { EX[now].ALU = ex_rs1_val << (ex_rs2_val & 0x1f); }
+  void SLT_exe() { EX[now].ALU = ex_rs1_val < ex_rs2_val; }
+  void SLTU_exe() { EX[now].ALU = uint32_t(ex_rs1_val) < uint32_t(ex_rs2_val); }
+  void XOR_exe() { EX[now].ALU = ex_rs1_val ^ ex_rs2_val; }
   void SRL_exe() {
-    EX[now].ALU =
-        uint32_t(reg[EX[now].rs1]) >> uint32_t((reg[EX[now].rs2] & 0x1f));
+    EX[now].ALU = uint32_t(ex_rs1_val) >> uint32_t((ex_rs2_val & 0x1f));
   }
-  void SRA_exe() {
-    EX[now].ALU = reg[EX[now].rs1] >> (reg[EX[now].rs2] & 0x1f);
-  }
-  void OR_exe() { EX[now].ALU = reg[EX[now].rs1] | reg[EX[now].rs2]; }
-  void AND_exe() { EX[now].ALU = reg[EX[now].rs1] & reg[EX[now].rs2]; }
+  void SRA_exe() { EX[now].ALU = ex_rs1_val >> (ex_rs2_val & 0x1f); }
+  void OR_exe() { EX[now].ALU = ex_rs1_val | ex_rs2_val; }
+  void AND_exe() { EX[now].ALU = ex_rs1_val & ex_rs2_val; }
   void (simulator::*func_exe[50])() = {
       &simulator::LUI_exe,  &simulator::AUIPC_exe, &simulator::JAL_exe,
       &simulator::JALR_exe, &simulator::BEQ_exe,   &simulator::BNE_exe,
@@ -545,7 +536,7 @@ public:
       &simulator::AND_exe};
   void execute() {
     (this->*func_exe[EX[now].opt])();
-  //  printf("execute: %s %x\n", NAME::INST_string[EX[now].opt], EX[now].ALU);
+    // printf("execute: %s %x\n", NAME::INST_string[EX[now].opt], EX[now].ALU);
     EX[now].state = finish;
   }
 
@@ -575,11 +566,15 @@ public:
     memcpy(&tmp, mem + MEM[now].ALU, 4);
     MEM[now].ALU = tmp;
   }
-  void SB_mem() { memcpy(mem + MEM[now].ALU, &reg[MEM[now].rs2], 1); }
+  void SB_mem() { memcpy(mem + MEM[now].ALU, &mem_rs2_val, 1); }
+  void SH_mem() { memcpy(mem + MEM[now].ALU, &mem_rs2_val, 2); }
+  void SW_mem() { memcpy(mem + MEM[now].ALU, &mem_rs2_val, 4); }
+  /*void SB_mem() { memcpy(mem + MEM[now].ALU, &reg[MEM[now].rs2], 1); }
   void SH_mem() { memcpy(mem + MEM[now].ALU, &reg[MEM[now].rs2], 2); }
   void SW_mem() { memcpy(mem + MEM[now].ALU, &reg[MEM[now].rs2], 4); }
+  */
   void memoryAccess() {
- //   printf("memoryaccess: %s\n", NAME::INST_string[MEM[now].opt]);
+    //   printf("memoryaccess: %s\n", NAME::INST_string[MEM[now].opt]);
     switch (MEM[now].opt) {
     case LB:
       LB_mem();
@@ -612,10 +607,11 @@ public:
   /*---------------------------instruction writeback-------------------------*/
   void writeBack() {
     if (WB[now].rd != UNKNOWN_REG) {
-      flag[WB[now].rd]--;
       reg[WB[now].rd] = WB[now].ALU;
       WB[now].state = finish;
-     // printf("WB:%s %s %x\n", NAME::INST_string[WB[now].opt],NAME::REG_string[WB[now].rd], WB[now].ALU);
+      // printf("WB:%s %s %x\n",
+      // NAME::INST_string[WB[now].opt],NAME::REG_string[WB[now].rd],
+      // WB[now].ALU);
     }
   }
   void next_loop() {
@@ -630,24 +626,23 @@ public:
     /*-----------------------------MEM[next]----------------------------*/
     if (MEM[now].state == unfinish) {
       MEM[next] = MEM[now];
+      if (MEM[next].rs2 != UNKNOWN_REG)
+        mem_rs2_val = reg[MEM[next].rs2];
     } else if (EX[now].state == finish) {
       MEM[next] = EX[now];
-      if (MEM[next].state != empty &&
-          (MEM[next].opt == LB || MEM[next].opt == LH || MEM[next].opt == LW)) {
-        if (MEM[now].state == finish && MEM[now].rs2 == MEM[next].rs2) {
-          pause = 4;
-        }
+      if (MEM[next].rs2 != UNKNOWN_REG) {
+        if (MEM[now].state == finish && MEM[now].rd == MEM[next].rs2)
+          mem_rs2_val = MEM[now].ALU;
+        else
+          mem_rs2_val = reg[MEM[next].rs2];
       }
     } else {
       MEM[next].state = empty;
     }
 
- //   printf("branch_skip: %x\n", branch_skip);
+    //   printf("branch_skip: %x\n", branch_skip);
     /*-----------------------------branch skip----------------------------*/
     if (branch_skip != 0xffffffff) {
-      if (ID[now].state == finish && ID[now].rd != UNKNOWN_REG) {
-        flag[ID[now].rd]--;
-      }
       EX[next].state = empty;
       ID[next].state = empty;
       IF[next].npc = branch_skip;
@@ -656,24 +651,46 @@ public:
       /*-----------------------------EX[next]----------------------------*/
       if (EX[now].state == unfinish) {
         EX[next] = EX[now];
-        if ((EX[next].rs1 != UNKNOWN_REG && MEM[now].state == finish &&
-             MEM[now].rd == EX[next].rs1) ||
-            (EX[next].rs2 != UNKNOWN_REG && MEM[now].state == finish &&
-             MEM[now].rd == EX[next].rs2)) {
-          pause = 3;
+        if (EX[next].rs1 != UNKNOWN_REG) {
+          if (MEM[now].state == finish && MEM[now].rd == EX[next].rs1)
+            ex_rs1_val = MEM[now].ALU;
+          else
+            ex_rs1_val = reg[EX[next].rs1];
+        }
+        if (EX[next].rs2 != UNKNOWN_REG) {
+          if (MEM[now].state == finish && MEM[now].rd == EX[next].rs2)
+            ex_rs2_val = MEM[now].ALU;
+          else
+            ex_rs2_val = reg[EX[next].rs2];
         }
       } else if (ID[now].state == finish) {
         EX[next] = ID[now];
-
-        if ((EX[next].rs1 != UNKNOWN_REG &&
-             ((MEM[now].state == finish && MEM[now].rd == EX[next].rs1) ||
-              (EX[now].state == finish && EX[now].rd == EX[next].rs1))) ||
-            (EX[next].rs2 != UNKNOWN_REG &&
-             ((MEM[now].state == finish && MEM[now].rd == EX[next].rs2) ||
-              (EX[now].state == finish && EX[now].rd == EX[next].rs2)))) {
-          pause = 3;
+        if (EX[next].rs1 != UNKNOWN_REG) {
+          ex_rs1_val = reg[EX[next].rs1];
+          if (MEM[now].state == finish && MEM[now].rd == EX[next].rs1)
+            ex_rs1_val = MEM[now].ALU;
+          if (EX[now].state == finish && EX[now].rd == EX[next].rs1) {
+            INST opt = EX[now].opt;
+            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW)
+              pause = 3;
+            else if (opt != SB && opt != SH && opt != SW)
+              ex_rs1_val = EX[now].ALU;
+          }
         }
-      //  printf("EX[next] %s\n", NAME::INST_string[EX[next].opt]);
+        if (EX[next].rs2 != UNKNOWN_REG) {
+          ex_rs2_val = reg[EX[next].rs2];
+          if (MEM[now].state == finish && MEM[now].rd == EX[next].rs2)
+            ex_rs2_val = MEM[now].ALU;
+          if (EX[now].state == finish && EX[now].rd == EX[next].rs2) {
+            INST opt = EX[now].opt;
+            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW)
+              pause = 3;
+            else if (opt != SB && opt != SH && opt != SW)
+              ex_rs2_val = EX[now].ALU;
+          }
+        }
+
+        //  printf("EX[next] %s\n", NAME::INST_string[EX[next].opt]);
       } else {
         EX[next].state = empty;
       }
@@ -702,7 +719,7 @@ public:
         IF[next].state = empty;
       }
     }
- //   printf("pause: %d\n", pause);
+    //   printf("pause: %d\n", pause);
   }
   void solve() {
     read();
@@ -746,9 +763,9 @@ public:
 
       reg[REG_ZERO] = 0;
       ///	for(int i = 0; i < 32; ++i) printf("%x\n", reg[i]);
-    //  printf("state: %s %s %s %s %s\n", NAME::STATE[IF[now].state],
+      //  printf("state: %s %s %s %s %s\n", NAME::STATE[IF[now].state],
       //       NAME::STATE[ID[now].state], NAME::STATE[EX[now].state],
-       //      NAME::STATE[MEM[now].state], NAME::STATE[WB[now].state]);
+      //      NAME::STATE[MEM[now].state], NAME::STATE[WB[now].state]);
       if (IF[now].state == empty && ID[now].state == empty &&
           EX[now].state == empty && MEM[now].state == empty &&
           WB[now].state == empty)
@@ -757,8 +774,8 @@ public:
 
       next_loop();
       next ^= 1, now ^= 1;
-   //   puts("-------------------------------------------------------------------"
-     //      "------------");
+      //   puts("-------------------------------------------------------------------"
+      //      "------------");
     }
     printf("%d\n", reg[REG_A0] & 0xff);
   }
