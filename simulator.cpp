@@ -679,9 +679,12 @@ public:
           pauseEX = pauseID = true;
         } else {
           EX[next] = EX[now];
-          ID[next] = ID[now];
-          IF[next] = IF[now];
-          pauseEX = pauseID = pauseIF = true;
+          pauseEX = true;
+          if (ID[now].state != finish && IF[now].state == finish) {
+            ID[next] = IF[now];
+            IF[next].state = unfinish;
+          } else
+            pauseID = pauseIF = true;
         }
         return;
       }
