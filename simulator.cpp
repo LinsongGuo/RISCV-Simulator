@@ -678,13 +678,18 @@ public:
           pc = branch_skip;
           pauseEX = pauseID = true;
         } else {
+          //pauseEX = pauseID = pauseIF = true;
           EX[next] = EX[now];
           pauseEX = true;
           if (ID[now].state != finish && IF[now].state == finish) {
             ID[next] = IF[now];
+            ID[next].state = unfinish;
             IF[next].state = unfinish;
-          } else
+          } else{
+            ID[next] = ID[now];
+            IF[next] = IF[now];
             pauseID = pauseIF = true;
+          }
         }
         return;
       }
@@ -716,8 +721,20 @@ public:
           if (MEM[now].state != empty && MEM[now].rd == EX[next].rs1) {
             if (MEM[now].state == finish) {
               ex_rs1_val = MEM[now].ALU;
-            } else
-              pauseEX = pauseID = pauseIF = true;
+            } else{
+              //pauseEX = pauseID = pauseIF = true;
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }    
           }
         }
         if (EX[next].rs2 != UNKNOWN_REG) {
@@ -725,8 +742,20 @@ public:
           if (MEM[now].state != empty && MEM[now].rd == EX[next].rs2) {
             if (MEM[now].state == finish)
               ex_rs2_val = MEM[now].ALU;
-            else
-              pauseEX = pauseID = pauseIF = true;
+            else{
+              //pauseEX = pauseID = pauseIF = true;
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }
           }
         }
       } else if (ID[now].state == finish) {
@@ -737,13 +766,37 @@ public:
           if (MEM[now].state != empty && MEM[now].rd == EX[next].rs1) {
             if (MEM[now].state == finish)
               ex_rs1_val = MEM[now].ALU;
-            else
-              pauseEX = pauseID = pauseIF = true;
+            else{
+              //pauseEX = pauseID = pauseIF = true;
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }
           }
           if (EX[now].state != empty && EX[now].rd == EX[next].rs1) {
             INST opt = EX[now].opt;
-            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW)
-              pauseEX = pauseID = pauseIF = true;
+            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW) {
+              //pauseEX = pauseID = pauseIF = true;
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }
             else if (opt != SB && opt != SH && opt != SW)
               ex_rs1_val = EX[now].ALU;
           }
@@ -753,14 +806,37 @@ public:
           if (MEM[now].state != empty && MEM[now].rd == EX[next].rs2) {
             if (MEM[now].state == finish)
               ex_rs2_val = MEM[now].ALU;
-            else
-              pauseEX = pauseID = pauseIF = true;
+            else {
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }
           }
           if (EX[now].state != empty && EX[now].rd == EX[next].rs2) {
             INST opt = EX[now].opt;
             if (opt == LB || opt == LBU || opt == LH || opt == LHU ||
-                opt == LW || EX[now].state == unfinish)
-              pauseEX = pauseID = pauseIF = true;
+                opt == LW || EX[now].state == unfinish) {
+              //pauseEX = pauseID = pauseIF = true;
+              pauseEX = true;
+              if (ID[now].state != finish && IF[now].state == finish) {
+                ID[next] = IF[now];
+                ID[next].state = unfinish;
+                IF[next].state = unfinish;
+              } else{
+                ID[next] = ID[now];
+                IF[next] = IF[now];
+                pauseID = pauseIF = true;
+              }
+              return;
+            }
             else if (opt != SB && opt != SH && opt != SW)
               ex_rs2_val = EX[now].ALU;
           }
