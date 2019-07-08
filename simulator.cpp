@@ -165,7 +165,6 @@ public:
 
   /*-----------------------branch prediction----------------------------*/
   bool get_prediction(const uint32_t &code) {
-    // return 0;
     return (history_table[(code >> 12) & 7] >> 1) & 1;
   }
   void update_prediction(const uint32_t &code, const bool &jump) {
@@ -231,6 +230,8 @@ public:
           pc += operand_B(code);
         else
           pc += 4;
+      } else if ((code & 0x7f) == 0x6f) {
+        pc += operand_J(code);
       } else
         pc += 4;
     }
@@ -447,10 +448,7 @@ public:
   /*--------------------------instruction execute----------------------------*/
   void LUI_exe() { EX[now].ALU = EX[now].operand; }
   void AUIPC_exe() { EX[now].ALU = EX[now].npc + EX[now].operand - 4; }
-  void JAL_exe() {
-    EX[now].ALU = EX[now].npc;
-    branch_skip = EX[now].npc + EX[now].operand - 4;
-  }
+  void JAL_exe() { EX[now].ALU = EX[now].npc; }
   void JALR_exe() {
     EX[now].ALU = EX[now].npc;
     branch_skip = (ex_rs1_val + EX[now].operand) & (-2);
