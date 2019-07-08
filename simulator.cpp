@@ -115,6 +115,7 @@ private:
   };
   enum State { empty, finish, unfinish };
   int reg[32], pc, now, next, branch_skip, ex_rs1_val, ex_rs2_val, mem_rs2_val;
+  bool pauseIF, pauseID, pauseEX, pauseMEM, pauseWB;
   uint8_t mem[0x200ff];
   char buffer[10];
 
@@ -124,14 +125,13 @@ private:
     REG rd, rs1, rs2;
     int32_t npc, operand, imm, ALU;
     State state;
-    bool pause;
     pipeline() {
       opt = UNKNOWN_INST;
       code = npc = operand = imm = ALU = 0;
       rd = rs1 = rs2 = UNKNOWN_REG;
       state = empty;
-      pause = false;
     }
+    /*
     pipeline &operator=(const pipeline &other) {
       if (&other == this)
         return *this;
@@ -146,7 +146,7 @@ private:
       ALU = other.ALU;
       state = other.state;
       return *this;
-    }
+    }*/
   } IF[2], ID[2], EX[2], MEM[2], WB[2];
 
 public:
@@ -154,6 +154,7 @@ public:
     pc = 0x00000000;
     branch_skip = 0xffffffff;
     now = 0, next = 1;
+    pauseIF = pauseID = pauseEX = pauseMEM = pauseWB = false;
     for (int i = 0; i < 32; ++i) {
       reg[i] = 0;
     }
@@ -550,9 +551,9 @@ public:
   void execute() {
     static int exe_cnt = 0;
     (this->*func_exe[EX[now].opt])();
-   /* printf("execute: %d %s %d %d %d %x %x %x %x\n", ++exe_cnt,
-           NAME::INST_string[EX[now].opt], EX[now].rs1, EX[now].rs2, EX[now].rd,
-          ex_rs1_val, ex_rs2_val, EX[now].operand, EX[now].ALU);*/
+    /* printf("execute: %d %s %d %d %d %x %x %x %x\n", ++exe_cnt,
+            NAME::INST_string[EX[now].opt], EX[now].rs1, EX[now].rs2,
+       EX[now].rd, ex_rs1_val, ex_rs2_val, EX[now].operand, EX[now].ALU);*/
     EX[now].state = finish;
   }
 
@@ -634,8 +635,7 @@ public:
     }
   }
   void next_loop() {
-    IF[next].pause = ID[next].pause = EX[next].pause = MEM[next].pause =
-        WB[next].pause = false;
+    pauseIF = pauseID = pauseEX = pauseMEM = pauseWB = false;
     /*-----------------------------WB[next]----------------------------*/
     if (MEM[now].state == finish) {
       WB[next] = MEM[now];
@@ -654,12 +654,12 @@ public:
           ID[next].state = empty;
           IF[next].npc = branch_skip;
           IF[next].state = unfinish;
-          EX[next].pause = ID[next].pause = true;
+          pauseEX = pauseID = true;
         } else {
           EX[next] = EX[now];
           ID[next] = ID[now];
           IF[next] = IF[now];
-          EX[next].pause = ID[next].pause = IF[next].pause = true;
+          pauseEX = pauseID = pauseIF = true;
         }
         return;
       }
@@ -667,8 +667,10 @@ public:
       MEM[next] = EX[now];
       MEM[next].state = unfinish;
       if (MEM[next].opt == SB || MEM[next].opt == SH || MEM[next].opt == SW) {
-        if (MEM[now].state != empty && MEM[now].rd == MEM[next].rs2)  mem_rs2_val = MEM[now].ALU;
-        else mem_rs2_val = reg[MEM[next].rs2];
+        if (MEM[now].state != empty && MEM[now].rd == MEM[next].rs2)
+          mem_rs2_val = MEM[now].ALU;
+        else
+          mem_rs2_val = reg[MEM[next].rs2];
       }
     } else {
       MEM[next].state = empty;
@@ -684,17 +686,17 @@ public:
     } else {
       /*-----------------------------EX[next]----------------------------*/
       if (EX[now].state == unfinish) {
-     //   printf("if EX unfinish\n");
+        //   printf("if EX unfinish\n");
         EX[next] = EX[now];
         if (EX[next].rs1 != UNKNOWN_REG) {
           ex_rs1_val = reg[EX[next].rs1];
           if (MEM[now].state != empty && MEM[now].rd == EX[next].rs1) {
             if (MEM[now].state == finish) {
-           // 	printf("rs1 %s %d %x\n", NAME::INST_string[MEM[now].opt], MEM[now].rd, MEM[now].ALU);
+              // 	printf("rs1 %s %d %x\n",
+              // NAME::INST_string[MEM[now].opt], MEM[now].rd, MEM[now].ALU);
               ex_rs1_val = MEM[now].ALU;
-            }
-            else
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
+            } else
+              pauseEX = pauseID = pauseIF = true;
           }
         }
         if (EX[next].rs2 != UNKNOWN_REG) {
@@ -703,11 +705,11 @@ public:
             if (MEM[now].state == finish)
               ex_rs2_val = MEM[now].ALU;
             else
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
+              pauseEX = pauseID = pauseIF = true;
           }
         }
       } else if (ID[now].state == finish) {
-      	//printf("else ID finish\n");
+        // printf("else ID finish\n");
         EX[next] = ID[now];
         EX[next].state = unfinish;
         if (EX[next].rs1 != UNKNOWN_REG) {
@@ -716,14 +718,14 @@ public:
             if (MEM[now].state == finish)
               ex_rs1_val = MEM[now].ALU;
             else
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
+              pauseEX = pauseID = pauseIF = true;
           }
           if (EX[now].state != empty && EX[now].rd == EX[next].rs1) {
             INST opt = EX[now].opt;
-            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW) 
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
-             else if (opt != SB && opt != SH && opt != SW) 
-             	ex_rs1_val = EX[now].ALU;
+            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW)
+              pauseEX = pauseID = pauseIF = true;
+            else if (opt != SB && opt != SH && opt != SW)
+              ex_rs1_val = EX[now].ALU;
           }
         }
         if (EX[next].rs2 != UNKNOWN_REG) {
@@ -732,14 +734,15 @@ public:
             if (MEM[now].state == finish)
               ex_rs2_val = MEM[now].ALU;
             else
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
+              pauseEX = pauseID = pauseIF = true;
           }
           if (EX[now].state != empty && EX[now].rd == EX[next].rs2) {
             INST opt = EX[now].opt;
-            if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW || EX[now].state == unfinish) 
-              EX[next].pause = ID[next].pause = IF[next].pause = true;
-             else if (opt != SB && opt != SH && opt != SW)
-             	ex_rs2_val = EX[now].ALU;
+            if (opt == LB || opt == LBU || opt == LH || opt == LHU ||
+                opt == LW || EX[now].state == unfinish)
+              pauseEX = pauseID = pauseIF = true;
+            else if (opt != SB && opt != SH && opt != SW)
+              ex_rs2_val = EX[now].ALU;
           }
         }
         //  printf("EX[next] %s\n", NAME::INST_string[EX[next].opt]);
@@ -780,32 +783,34 @@ public:
       if (WB[now].state != empty) {
         writeBack();
         reg[REG_ZERO] = 0;
-       /* for (int i = 0; i < 32; ++i)
-          printf("%x ", reg[i]);
-        printf("\n");*/
+        /* for (int i = 0; i < 32; ++i)
+           printf("%x ", reg[i]);
+         printf("\n");*/
       }
       // puts("----------------------------------------------------");
-      if (MEM[now].state != empty && !MEM[now].pause) {
-        if(MEM[now].rs2 == REG_ZERO) mem_rs2_val = 0;
+      if (MEM[now].state != empty && !pauseMEM) {
+        if (MEM[now].rs2 == REG_ZERO)
+          mem_rs2_val = 0;
         memoryAccess();
       }
 
       // puts("----------------------------------------------------");
-      if (EX[now].state != empty && !EX[now].pause) { 
-        if(EX[now].rs1 == REG_ZERO) ex_rs1_val = 0;
-        if(EX[now].rs2 == REG_ZERO) ex_rs2_val = 0;
+      if (EX[now].state != empty && !pauseEX) {
+        if (EX[now].rs1 == REG_ZERO)
+          ex_rs1_val = 0;
+        if (EX[now].rs2 == REG_ZERO)
+          ex_rs2_val = 0;
         execute();
       }
 
       // puts("----------------------------------------------------");
-      if (ID[now].state != empty && !ID[now].pause)
+      if (ID[now].state != empty && !pauseID)
         decode();
 
       // puts("----------------------------------------------------");
-      if (IF[now].state != empty && !IF[now].pause)
+      if (IF[now].state != empty && !pauseIF)
         fetch();
 
-      
       ///	for(int i = 0; i < 32; ++i) printf("%x\n", reg[i]);
       //  printf("state: %s %s %s %s %s\n", NAME::STATE[IF[now].state],
       //   NAME::STATE[ID[now].state], NAME::STATE[EX[now].state],
