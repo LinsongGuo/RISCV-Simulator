@@ -126,11 +126,13 @@ private:
     REG rd, rs1, rs2;
     int32_t npc, operand, imm, ALU;
     State state;
+    bool jump;
     pipeline() {
       opt = UNKNOWN_INST;
       code = npc = operand = imm = ALU = 0;
       rd = rs1 = rs2 = UNKNOWN_REG;
       state = empty;
+      jump = false;
     }
   } IF[2], ID[2], EX[2], MEM[2], WB[2];
 
@@ -144,7 +146,7 @@ public:
     pauseIF = pauseID = pauseEX = pauseMEM = false;
     for (int i = 0; i < 32; ++i)
       reg[i] = 0;
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < (1 << 8); ++i)
       history_table[i] = 0;
   }
 
@@ -181,7 +183,20 @@ public:
     else // 00
       tmp = jump ? 1 : 0;
   }
-
+/*
+  void update_prediction(const int32_t &p, const bool &jump) {
+    uint8_t &tmp = history_table[(p >> 2) & 0xff];
+    tmp &= 3;
+    if (tmp == 3) // 11
+      tmp = jump ? 3 : 2;
+    else if (tmp == 2) // 10
+      tmp = jump ? 3 : 1;
+    else if (tmp == 1) // 01
+      tmp = jump ? 2 : 0;
+    else // 00
+      tmp = jump ? 1 : 0;
+  }
+*/
   /*----------------------immediate operand------------------------------*/
   int operand_I(const uint32_t &code) {
     int res = code >> 20;
@@ -228,7 +243,8 @@ public:
       IF[now].code = code;
       IF[now].npc = pc + 4;
       if ((code & 0x7f) == 0x63) { // BEQ BNE BLT BGE BLTU BGEU
-        if (get_prediction(pc))
+        IF[now].jump = get_prediction(pc);
+        if (IF[now].jump)
           pc += operand_B(code);
         else
           pc += 4;
@@ -460,8 +476,8 @@ public:
   void BEQ_exe() {
     bool jump = (ex_rs1_val == ex_rs2_val);
     //++tot_predict;
-    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
@@ -473,8 +489,8 @@ public:
   void BNE_exe() {
     bool jump = (ex_rs1_val != ex_rs2_val);
     //++tot_predict;
-    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
@@ -486,8 +502,8 @@ public:
   void BLT_exe() {
     bool jump = (ex_rs1_val < ex_rs2_val);
     //++tot_predict;
-    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
@@ -498,9 +514,9 @@ public:
   }
   void BGE_exe() {
     bool jump = (ex_rs1_val >= ex_rs2_val);
-    //++tot_predict;
-    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+   // ++tot_predict;
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
@@ -512,8 +528,8 @@ public:
   void BLTU_exe() {
     bool jump = (uint32_t(ex_rs1_val) < uint32_t(ex_rs2_val));
     //++tot_predict;
-    ///ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
@@ -525,8 +541,8 @@ public:
   void BGEU_exe() {
     bool jump = (uint32_t(ex_rs1_val) >= uint32_t(ex_rs2_val));
     //++tot_predict;
-    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
-    if (get_prediction(EX[now].npc - 4)) {
+    //ac_predict += (EX[now].jump == jump);
+    if (EX[now].jump) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
