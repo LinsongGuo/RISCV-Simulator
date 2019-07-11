@@ -113,11 +113,12 @@ private:
     AND,
     UNKNOWN_INST
   };
-  enum State { empty, finish, unfinish };
+  enum State { empty, finished, unfinished };
   int reg[32], pc, now, next, branch_skip, ex_rs1_val, ex_rs2_val, mem_rs2_val;
   bool pauseIF, pauseID, pauseEX, pauseMEM;
-  uint8_t mem[0x200ff], history_table[8];
+  uint8_t mem[0x200ff], history_table[1 << 8];
   char buffer[10];
+  int tot_predict, ac_predict;
 
   struct pipeline {
     INST opt;
@@ -138,6 +139,7 @@ public:
   simulator() {
     pc = 0;
     branch_skip = 0xffffffff;
+    tot_predict = ac_predict = 0;
     now = 0, next = 1;
     pauseIF = pauseID = pauseEX = pauseMEM = false;
     for (int i = 0; i < 32; ++i)
@@ -164,11 +166,11 @@ public:
   }
 
   /*-----------------------branch prediction----------------------------*/
-  bool get_prediction(const uint32_t &code) {
-    return (history_table[(code >> 12) & 7] >> 1) & 1;
+  bool get_prediction(const int32_t &p) {
+    return (history_table[(p >> 2) & 0xff] >> 1) & 1;
   }
-  void update_prediction(const uint32_t &code, const bool &jump) {
-    uint8_t &tmp = history_table[(code >> 12) & 7];
+  void update_prediction(const int32_t &p, const bool &jump) {
+    uint8_t &tmp = history_table[(p >> 2) & 0xff];
     tmp &= 3;
     if (tmp == 3) // 11
       tmp = jump ? 3 : 2;
@@ -222,11 +224,11 @@ public:
     if (code == 0x00c68223)
       IF[now].state = empty;
     else {
-      IF[now].state = finish;
+      IF[now].state = finished;
       IF[now].code = code;
       IF[now].npc = pc + 4;
       if ((code & 0x7f) == 0x63) { // BEQ BNE BLT BGE BLTU BGEU
-        if (get_prediction(code))
+        if (get_prediction(pc))
           pc += operand_B(code);
         else
           pc += 4;
@@ -440,7 +442,7 @@ public:
     ID[now].rd = rd;
     ID[now].imm = imm;
     ID[now].operand = operand;
-    ID[now].state = finish;
+    ID[now].state = finished;
     //  printf("decode: %s %s %s %s %x\n", NAME::INST_string[opt],
     //  NAME::REG_string[rs1],
     //      NAME::REG_string[rs2], NAME::REG_string[rd], operand);
@@ -457,70 +459,81 @@ public:
 
   void BEQ_exe() {
     bool jump = (ex_rs1_val == ex_rs2_val);
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void BNE_exe() {
     bool jump = (ex_rs1_val != ex_rs2_val);
-
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void BLT_exe() {
     bool jump = (ex_rs1_val < ex_rs2_val);
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void BGE_exe() {
     bool jump = (ex_rs1_val >= ex_rs2_val);
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void BLTU_exe() {
     bool jump = (uint32_t(ex_rs1_val) < uint32_t(ex_rs2_val));
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    ///ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void BGEU_exe() {
     bool jump = (uint32_t(ex_rs1_val) >= uint32_t(ex_rs2_val));
-    if (get_prediction(EX[now].code)) {
+    //++tot_predict;
+    //ac_predict += (get_prediction(EX[now].npc - 4) == jump);
+    if (get_prediction(EX[now].npc - 4)) {
       if (!jump)
         branch_skip = EX[now].npc;
     } else {
       if (jump)
         branch_skip = EX[now].npc + EX[now].operand - 4;
     }
-    update_prediction(EX[now].code, jump);
+    update_prediction(EX[now].npc - 4, jump);
   }
   void LB_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
   void LBU_exe() { EX[now].ALU = ex_rs1_val + EX[now].operand; }
@@ -572,7 +585,7 @@ public:
   void execute() {
     static int exe_cnt = 0;
     (this->*func_exe[EX[now].opt])();
-    EX[now].state = finish;
+    EX[now].state = finished;
     //   printf("%s %d %d %d %d %x %x %x %x\n",
     //         NAME::INST_string[EX[now].opt],  ++exe_cnt,EX[now].rs1,
     //         EX[now].rs2,
@@ -615,7 +628,7 @@ public:
     static int time_clock = 0;
     ++time_clock;
     if (time_clock % 3) {
-      MEM[now].state = unfinish;
+      MEM[now].state = unfinished;
       return;
     }
     // printf("memoryaccess: %s\n", NAME::INST_string[MEM[now].opt]);
@@ -645,14 +658,14 @@ public:
       SW_mem();
       break;
     }
-    MEM[now].state = finish;
+    MEM[now].state = finished;
   }
 
   /*---------------------------instruction writeback-------------------------*/
   void writeBack() {
     if (WB[now].rd != UNKNOWN_REG) {
       reg[WB[now].rd] = WB[now].ALU;
-      WB[now].state = finish;
+      WB[now].state = finished;
       // printf("WB:%s %s %x\n",
       // NAME::INST_string[WB[now].opt],NAME::REG_string[WB[now].rd],
       // WB[now].ALU);
@@ -662,32 +675,32 @@ public:
     pauseIF = pauseID = pauseEX = pauseMEM = false;
 
     /*-----------------------------WB[next]----------------------------*/
-    if (MEM[now].state == finish) {
+    if (MEM[now].state == finished) {
       WB[next] = MEM[now];
-      WB[next].state = unfinish;
+      WB[next].state = unfinished;
     } else
       WB[next].state = empty;
 
     /*-----------------------------MEM[next]----------------------------*/
-    if (MEM[now].state == unfinish) {
+    if (MEM[now].state == unfinished) {
       MEM[next] = MEM[now];
       if (MEM[next].opt == SB || MEM[next].opt == SH || MEM[next].opt == SW)
         mem_rs2_val = reg[MEM[next].rs2];
-      if (EX[now].state == finish) {
+      if (EX[now].state == finished) {
         if (branch_skip != 0xffffffff) {
           EX[next] = EX[now];
           ID[next].state = empty;
-          IF[next].state = unfinish;
+          IF[next].state = unfinished;
           pc = branch_skip;
           pauseEX = pauseID = true;
         } else {
           // pauseEX = pauseID = pauseIF = true;
           EX[next] = EX[now];
           pauseEX = true;
-          if (ID[now].state != finish && IF[now].state == finish) {
+          if (ID[now].state != finished && IF[now].state == finished) {
             ID[next] = IF[now];
-            ID[next].state = unfinish;
-            IF[next].state = unfinish;
+            ID[next].state = unfinished;
+            IF[next].state = unfinished;
           } else {
             ID[next] = ID[now];
             IF[next] = IF[now];
@@ -696,9 +709,9 @@ public:
         }
         return;
       }
-    } else if (EX[now].state == finish) {
+    } else if (EX[now].state == finished) {
       MEM[next] = EX[now];
-      MEM[next].state = unfinish;
+      MEM[next].state = unfinished;
       if (MEM[next].opt == SB || MEM[next].opt == SH || MEM[next].opt == SW) {
         if (MEM[now].state != empty && MEM[now].rd == MEM[next].rs2)
           mem_rs2_val = MEM[now].ALU; // trans: MEM[now] --> MEM[next]
@@ -713,26 +726,26 @@ public:
     if (branch_skip != 0xffffffff) {
       EX[next].state = empty;
       ID[next].state = empty;
-      IF[next].state = unfinish;
+      IF[next].state = unfinished;
       pc = branch_skip;
       return;
     }
 
     /*-----------------------------EX[next]------------------------------*/
-    if (EX[now].state == unfinish) {
+    if (EX[now].state == unfinished) {
       EX[next] = EX[now];
       if (EX[next].rs1 != UNKNOWN_REG) {
         ex_rs1_val = reg[EX[next].rs1];
         if (MEM[now].state != empty && MEM[now].rd == EX[next].rs1) {
-          if (MEM[now].state == finish) {
+          if (MEM[now].state == finished) {
             ex_rs1_val = MEM[now].ALU; // trans: MEM[now] --> EX[next]
           } else {
             // pauseEX = pauseID = pauseIF = true;
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -745,15 +758,15 @@ public:
       if (EX[next].rs2 != UNKNOWN_REG) {
         ex_rs2_val = reg[EX[next].rs2];
         if (MEM[now].state != empty && MEM[now].rd == EX[next].rs2) {
-          if (MEM[now].state == finish)
+          if (MEM[now].state == finished)
             ex_rs2_val = MEM[now].ALU; // trans: MEM[now] --> EX[next]
           else {
             // pauseEX = pauseID = pauseIF = true;
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -763,21 +776,21 @@ public:
           }
         }
       }
-    } else if (ID[now].state == finish) {
+    } else if (ID[now].state == finished) {
       EX[next] = ID[now];
-      EX[next].state = unfinish;
+      EX[next].state = unfinished;
       if (EX[next].rs1 != UNKNOWN_REG) {
         ex_rs1_val = reg[EX[next].rs1];
         if (MEM[now].state != empty && MEM[now].rd == EX[next].rs1) {
-          if (MEM[now].state == finish)
+          if (MEM[now].state == finished)
             ex_rs1_val = MEM[now].ALU; // trans: MEM[now] --> EX[next]
           else {
             // pauseEX = pauseID = pauseIF = true;
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -791,10 +804,10 @@ public:
           if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW) {
             // pauseEX = pauseID = pauseIF = true;
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -808,14 +821,14 @@ public:
       if (EX[next].rs2 != UNKNOWN_REG) {
         ex_rs2_val = reg[EX[next].rs2];
         if (MEM[now].state != empty && MEM[now].rd == EX[next].rs2) {
-          if (MEM[now].state == finish)
+          if (MEM[now].state == finished)
             ex_rs2_val = MEM[now].ALU; // trans: MEM[now] --> EX[next]
           else {
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -827,13 +840,13 @@ public:
         if (EX[now].state != empty && EX[now].rd == EX[next].rs2) {
           INST opt = EX[now].opt;
           if (opt == LB || opt == LBU || opt == LH || opt == LHU || opt == LW ||
-              EX[now].state == unfinish) {
+              EX[now].state == unfinished) {
             // pauseEX = pauseID = pauseIF = true;
             pauseEX = true;
-            if (ID[now].state != finish && IF[now].state == finish) {
+            if (ID[now].state != finished && IF[now].state == finished) {
               ID[next] = IF[now];
-              ID[next].state = unfinish;
-              IF[next].state = unfinish; // IF continue ID empty EX pause
+              ID[next].state = unfinished;
+              IF[next].state = unfinished; // IF continue ID empty EX pause
             } else {
               ID[next] = ID[now];
               IF[next] = IF[now];
@@ -848,11 +861,11 @@ public:
       EX[next].state = empty;
     }
     /*-----------------------------ID[next]----------------------------*/
-    if (ID[now].state == unfinish) {
+    if (ID[now].state == unfinished) {
       ID[next] = ID[now];
-    } else if (IF[now].state == finish) {
+    } else if (IF[now].state == finished) {
       ID[next] = IF[now];
-      ID[next].state = unfinish;
+      ID[next].state = unfinished;
     } else {
       ID[next].state = empty;
     }
@@ -860,11 +873,11 @@ public:
     if (IF[now].state == empty)
       IF[next].state = empty;
     else
-      IF[next].state = unfinish;
+      IF[next].state = unfinished;
   }
   void solve() {
     read();
-    IF[now].state = unfinish;
+    IF[now].state = unfinished;
     while (true) {
       branch_skip = 0xffffffff;
       if (WB[now].state != empty) {
@@ -909,6 +922,7 @@ public:
       //    "------------");
     }
     printf("%d\n", reg[REG_A0] & 0xff);
+    //printf("prediction: %d %d %.3f\n", tot_predict, ac_predict, (double)ac_predict / tot_predict);
   }
 };
 
