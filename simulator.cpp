@@ -171,7 +171,7 @@ public:
   bool get_prediction(const int32_t &p) {
     return (history_table[(p >> 2) & 0xff] >> 1) & 1;
   }
-  void update_prediction(const int32_t &p, const bool &jump) {
+/*  void update_prediction(const int32_t &p, const bool &jump) {
     uint8_t &tmp = history_table[(p >> 2) & 0xff];
     tmp &= 3;
     if (tmp == 3) // 11
@@ -183,7 +183,7 @@ public:
     else // 00
       tmp = jump ? 1 : 0;
   }
-/*
+*/
   void update_prediction(const int32_t &p, const bool &jump) {
     uint8_t &tmp = history_table[(p >> 2) & 0xff];
     tmp &= 3;
@@ -196,7 +196,7 @@ public:
     else // 00
       tmp = jump ? 1 : 0;
   }
-*/
+
   /*----------------------immediate operand------------------------------*/
   int operand_I(const uint32_t &code) {
     int res = code >> 20;
@@ -514,7 +514,7 @@ public:
   }
   void BGE_exe() {
     bool jump = (ex_rs1_val >= ex_rs2_val);
-   // ++tot_predict;
+   //++tot_predict;
     //ac_predict += (EX[now].jump == jump);
     if (EX[now].jump) {
       if (!jump)
@@ -540,7 +540,7 @@ public:
   }
   void BGEU_exe() {
     bool jump = (uint32_t(ex_rs1_val) >= uint32_t(ex_rs2_val));
-    //++tot_predict;
+   // ++tot_predict;
     //ac_predict += (EX[now].jump == jump);
     if (EX[now].jump) {
       if (!jump)
